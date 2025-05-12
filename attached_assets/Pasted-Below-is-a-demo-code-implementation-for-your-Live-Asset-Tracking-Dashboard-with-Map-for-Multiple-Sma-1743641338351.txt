@@ -1,0 +1,261 @@
+Below is a demo code implementation for your Live Asset Tracking Dashboard with Map for Multiple Smart Labels, tailored to your requirements. Since location updates occur every 15 minutes, I’ve designed the demo to simulate smooth movement between updates using interpolation, making it engaging and visually appealing. The code uses React and Leaflet.js, with a client-side simulation for real-time updates, and includes a clean, responsive design.
+Demo Code
+Prerequisites
+Node.js and npm installed.
+Create a new React project using npx create-react-app asset-tracking-demo.
+Install required dependencies:
+bash
+npm install react-leaflet leaflet
+Add Leaflet CSS to your project (e.g., in index.js or App.js).
+Code Implementation (src/App.js)
+jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix Leaflet default marker icon issue
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Initial mock data for smart labels
+const initialLabels = [
+  {
+    id: "label001",
+    asset: "Package A",
+    trace: [
+      { lat: 34.0522, lng: -118.2437, timestamp: new Date("2025-04-01T10:00:00Z") },
+      { lat: 34.0600, lng: -118.2500, timestamp: new Date("2025-04-01T10:15:00Z") },
+      { lat: 34.0700, lng: -118.2600, timestamp: new Date("2025-04-01T10:30:00Z") },
+    ],
+  },
+  {
+    id: "label002",
+    asset: "Package B",
+    trace: [
+      { lat: 34.0622, lng: -118.2537, timestamp: new Date("2025-04-01T10:00:00Z") },
+      { lat: 34.0650, lng: -118.2550, timestamp: new Date("2025-04-01T10:15:00Z") },
+      { lat: 34.0680, lng: -118.2580, timestamp: new Date("2025-04-01T10:30:00Z") },
+    ],
+  },
+];
+
+// Function to interpolate position based on current time
+function getPositionAtTime(trace, currentTime) {
+  for (let i = 0; i < trace.length - 1; i++) {
+    const pointA = trace[i];
+    const pointB = trace[i + 1];
+    if (currentTime >= pointA.timestamp && currentTime <= pointB.timestamp) {
+      const timeDiff = (pointB.timestamp - pointA.timestamp) / 1000; // in seconds
+      const elapsed = (currentTime - pointA.timestamp) / 1000;
+      const ratio = elapsed / timeDiff;
+      const lat = pointA.lat + ratio * (pointB.lat - pointA.lat);
+      const lng = pointA.lng + ratio * (pointB.lng - pointA.lng);
+      return { lat, lng };
+    }
+  }
+  if (trace.length > 0 && currentTime >= trace[trace.length - 1].timestamp) {
+    return trace[trace.length - 1];
+  }
+  if (trace.length > 0 && currentTime < trace[0].timestamp) {
+    return trace[0];
+  }
+  return null;
+}
+
+function App() {
+  const [labels] = useState(initialLabels);
+  const [currentTime, setCurrentTime] = useState(new Date("2025-04-01T10:00:00Z"));
+  const mapRef = useRef();
+
+  // Simulate time progression (1 minute per second)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(prev => new Date(prev.getTime() + 60000));
+    }, 1000); // Update every second
+    return () => clearInterval(interval);
+  }, []);
+
+  // Center map on a label when clicked
+  const handleLabelClick = (label) => {
+    const position = getPositionAtTime(label.trace, currentTime);
+    if (position && mapRef.current) {
+      mapRef.current.flyTo([position.lat, position.lng], 15);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh' }}>
+      {/* Map Section */}
+      <div style={{ width: '70%' }}>
+        <MapContainer
+          center={[34.0522, -118.2437]} // Centered on Los Angeles
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+          whenCreated={map => { mapRef.current = map; }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          />
+          {labels.map(label => {
+            const position = getPositionAtTime(label.trace, currentTime);
+            const pastTrace = label.trace.filter(pos => pos.timestamp <= currentTime);
+            if (position) {
+              return (
+                <React.Fragment key={label.id}>
+                  <Marker position={[position.lat, position.lng]} />
+                  {pastTrace.length > 1 && (
+                    <Polyline
+                      positions={pastTrace.map(pos => [pos.lat, pos.lng])}
+                      color="blue"
+                      weight={2}
+                      dashArray="5, 10"
+                    />
+                  )}
+                </React.Fragment>
+              );
+            }
+            return null;
+          })}
+        </MapContainer>
+      </div>
+
+      {/* Sidebar Section */}
+      <div style={{ width: '30%', padding: '10px', overflowY: 'auto', backgroundColor: '#f9f9f9' }}>
+        <h2 style={{ marginBottom: '20px' }}>Smart Labels</h2>
+        {labels.map(label => {
+          const position = getPositionAtTime(label.trace, currentTime);
+          const lastTraceTime = label.trace[label.trace.length - 1].timestamp;
+          const status = currentTime < lastTraceTime ? "Moving" : "Idle";
+          if (position) {
+            return (
+              <div
+                key={label.id}
+                onClick={() => handleLabelClick(label)}
+                style={{
+                  cursor: 'pointer',
+                  marginBottom: '15px',
+                  padding: '10px',
+                  backgroundColor: '#fff',
+                  borderRadius: '5px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                }}
+              >
+                <h3 style={{ margin: '0 0 5px 0' }}>{label.asset}</h3>
+                <p><strong>ID:</strong> {label.id}</p>
+                <p><strong>Status:</strong> {status}</p>
+                <p><strong>Last Updated:</strong> {currentTime.toISOString().slice(0, 19).replace('T', ' ')}</p>
+                <p><strong>Coordinates:</strong> {position.lat.toFixed(4)}, {position.lng.toFixed(4)}</p>
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default App;
+Explanation
+Core Features
+Map Interface
+Library: Uses react-leaflet with OpenStreetMap tiles for a free, open-source map.
+Markers: Each smart label is displayed as a movable pin, updated based on the simulated time.
+Polylines: A dashed blue line traces the movement history up to the current time.
+Simulated Real-Time Updates
+Since real updates occur every 15 minutes, the demo interpolates positions between these points.
+The currentTime state advances 1 minute every second, simulating a 15-minute period in 15 seconds for a dynamic demo.
+The getPositionAtTime function calculates the current position by linearly interpolating between two trace points.
+Sidebar Information
+Displays a list of labels with:
+Label ID/Asset Name: Unique identifier and name.
+Last Updated Time: Simulated current time in a readable format.
+Current Coordinates: Latitude and longitude, rounded for readability.
+Status: "Moving" if the label is between points, "Idle" if it has reached the last point.
+Clicking a label centers the map on its current position with a smooth flyTo animation.
+Responsive Design
+Uses inline CSS for simplicity (you can replace with Tailwind CSS for a more polished look).
+The layout splits into a 70% map and 30% sidebar, adjusting to screen height.
+Handling 15-Minute Updates
+Interpolation: Between each 15-minute update, the demo generates smooth movement by interpolating positions. For example, a label moves from point A to point B over 15 seconds in the demo, representing 15 minutes in real time.
+Simulation: The useEffect hook updates currentTime every second, advancing the simulation clock by 1 minute, ensuring continuous movement for a compelling demo.
+Tech Stack
+Frontend: React + react-leaflet.
+Map: Leaflet with OpenStreetMap tiles.
+Data: Client-side mock data with no backend (simulated updates via setInterval).
+Deliverables Met
+Single-Page Dashboard: Map and sidebar on one screen.
+5-10 Labels: The code supports multiple labels (2 shown, easily expandable).
+Clean Design: Simple, functional layout with clickable interactions.
+Running the Demo
+Replace src/App.js with the code above.
+Add import 'leaflet/dist/leaflet.css'; to src/index.js if not already present.
+Run the app:
+bash
+npm start
+Open http://localhost:3000 in your browser.
+The dashboard will start simulating movement immediately, with pins moving and polylines growing as time progresses.
+Optional Features (Not Implemented but Suggested)
+To enhance the demo further, consider these additions:
+WebSocket Integration
+Set up a Node.js + Express server with Socket.IO.
+Send mock updates every 10 seconds from the server instead of using setInterval.
+javascript
+// Backend (server.js)
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
+
+io.on('connection', (socket) => {
+  setInterval(() => {
+    socket.emit('update', initialLabels); // Send updated data
+  }, 10000);
+});
+
+server.listen(5000, () => console.log('Server running on port 5000'));
+jsx
+// Frontend (App.js)
+import io from 'socket.io-client';
+useEffect(() => {
+  const socket = io('http://localhost:5000');
+  socket.on('update', (data) => setLabels(data));
+  return () => socket.disconnect();
+}, []);
+Search and Filter
+Add a search bar and filter dropdown above the sidebar:
+jsx
+const [search, setSearch] = useState('');
+const filteredLabels = labels.filter(label => label.id.includes(search));
+// Add <input> for search above the sidebar
+Color-Coded Pins
+Customize marker icons based on status:
+jsx
+const icon = new L.Icon({
+  iconUrl: status === 'Moving' ? 'blue-icon.png' : 'gray-icon.png',
+  iconSize: [25, 41],
+});
+<Marker position={[position.lat, position.lng]} icon={icon} />
+Animated Trace Lines
+Use Leaflet’s animated polyline plugins or CSS animations to make the trace grow dynamically.
+Tips for a Great Demo
+Extend Trace Data: Add more points to initialLabels to show longer paths (e.g., 5-10 points per label).
+Playback Control: Add play/pause buttons to control the simulation:
+jsx
+const [isPlaying, setIsPlaying] = useState(true);
+useEffect(() => {
+  if (!isPlaying) return;
+  const interval = setInterval(() => setCurrentTime(prev => new Date(prev.getTime() + 60000)), 1000);
+  return () => clearInterval(interval);
+}, [isPlaying]);
+// Add <button>Play/Pause</button>
+Visual Appeal: Use Tailwind CSS for a polished look (e.g., npm install tailwindcss and configure it).
+This code provides a solid foundation for your live asset tracking dashboard, simulating real-time movement effectively despite the 15-minute update interval. Let me know if you’d like to expand on any part!

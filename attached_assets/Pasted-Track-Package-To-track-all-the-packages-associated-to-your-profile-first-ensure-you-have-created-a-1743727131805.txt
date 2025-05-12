@@ -1,0 +1,53 @@
+Track Package
+To track all the packages associated to your profile, first ensure you have created an account at https://track.shiprec.io/packages. This route is not authenticated, allowing package receivers to view the current location of their package.
+
+Make a GET request to:
+
+https://track.shiprec.io/api/packages/track?token=ADD_PACKAGE_TOKEN_ID_HERE
+
+GET parameters:
+
+Token (required): You can get the link to this package by clicking on the API button on the package UI.
+interval_hours (optional): Granularity for older location reports. The backend will return the most recent location for each time interval of interval_hours hours, starting from the most recent location report (default 1, min 1, max 7 * 24)
+Alternatively, see List and use the tokenId from the return body as a parameter.
+
+Webhooks
+Latest location report for token HTTPS requests will be sent whenever the backend receives a location update for a tracking token that is more recent than the last known location. The most recent known location is also sent immediately after a new token is generated for a device that already has a recent location report (i.e. <2 hours)
+
+Two different webhook modes can be configured:
+
+latest: Only receive one location report per webhook call with the latest report seen for this device (Will still be sent in a JSON array containing one element)
+all: Receive all location reports for a device as they become available, including outdated ones that were reported with a delay
+Webhook Target: This is a URL of a HTTP(S) service hosted by the client. Please send URL to hello@shiprec.io.
+
+Payload format is below:
+
+[
+  {
+    "token": "1234567890123456789",
+    "mac_id": "AF1234567890",
+    "lat": 38.0000001,
+    "long": -97.0000001,
+    "status": 1,
+    "timestamp": 1028215566,
+    "is_latest": true
+  },
+  {
+    "token": "1234567890123456789",
+    "mac_id": "AF1234567890",
+    "lat": 38.0000003,
+    "long": -97.0000003,
+    "status": null,
+    "timestamp": 1028215000,
+    "is_latest": false
+  },
+  {
+    "token": "1234567890123456789",
+    "mac_id": "AF1234567890",
+    "lat": 38.0000001,
+    "long": -97.0000001,
+    "status": 2
+    "timestamp": 1028214800,
+    "is_latest": false
+  }
+]
